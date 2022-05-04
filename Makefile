@@ -1,5 +1,5 @@
 SDK_DIR ?= sdk
-VERSION ?= vdev
+VERSION ?= 1.1
 
 CFLAGS += -D'VERSION="${VERSION}"'
 

@@ -5,7 +5,6 @@
 #define VERSION "vdev"
 #endif
 
-#include <bcl.h>
 #include <twr.h>
 
 
