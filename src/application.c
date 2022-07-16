@@ -1,5 +1,7 @@
 #include <application.h>
 #include <radio.h>
+#include <twr.h>
+
 #define MAX_SOIL_SENSORS                    5
 
 #define SERVICE_MODE_INTERVAL               (15 * 60 * 1000)
@@ -271,34 +273,40 @@ void switch_to_normal_mode_task(void *param)
 void application_init(void)
 {
     twr_log_init(TWR_LOG_LEVEL_DUMP, TWR_LOG_TIMESTAMP_ABS);
-
+    //twr_log_debug("log 1");
     // Initialize LED
     twr_led_init(&led, TWR_GPIO_LED, false, false);
 
     // Initialize button
     twr_button_init(&button, TWR_GPIO_BUTTON, TWR_GPIO_PULL_DOWN, false);
     twr_button_set_event_handler(&button, button_event_handler, NULL);
+    //twr_log_debug("log 2");
 
     // Initialize thermometer sensor on core module
     twr_tmp112_init(&tmp112, TWR_I2C_I2C0, 0x49);
     twr_tmp112_set_event_handler(&tmp112, tmp112_event_handler, NULL);
     twr_tmp112_set_update_interval(&tmp112, TEMPERATURE_UPDATE_SERVICE_INTERVAL);
+    //twr_log_debug("log 3");
 
     // Initialize soil sensor
     twr_soil_sensor_init_multiple(&soil_sensor, sensors, 5);
     twr_soil_sensor_set_event_handler(&soil_sensor, soil_sensor_event_handler, NULL);
     twr_soil_sensor_set_update_interval(&soil_sensor, SENSOR_UPDATE_SERVICE_INTERVAL);
+    //twr_log_debug("log 4");
 
     // Initialize power module
     twr_module_power_init();
+    //twr_log_debug("log 5");
 
     // Initialize relay module(s)
     twr_module_relay_init(&relay_0_0, TWR_MODULE_RELAY_I2C_ADDRESS_DEFAULT);
     twr_module_relay_init(&relay_0_1, TWR_MODULE_RELAY_I2C_ADDRESS_ALTERNATE);
+    //twr_log_debug("log 6");
 
     // Initialize radio
     twr_radio_init(TWR_RADIO_MODE_NODE_LISTENING);
     twr_radio_pairing_request("vyz-bazen", VERSION);
+    //twr_log_debug("log 7");
 
     twr_scheduler_register(switch_to_normal_mode_task, NULL, SERVICE_MODE_INTERVAL);
 
