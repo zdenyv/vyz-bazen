@@ -1,7 +1,7 @@
 SDK_DIR ?= sdk
-VERSION ?= 1.1
+FW_VERSION ?= 1.2
 
-CFLAGS += -D'VERSION="${VERSION}"'
+CFLAGS += -D'FW_VERSION="${FW_VERSION}"'
 
 -include sdk/Makefile.mk
 

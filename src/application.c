@@ -10,6 +10,8 @@
 #define TEMPERATURE_PUB_DIFFERENCE          0.2f
 #define TEMPERATURE_UPDATE_SERVICE_INTERVAL (1 * 1000)
 #define TEMPERATURE_UPDATE_NORMAL_INTERVAL  (10 * 1000)
+#define TEMPERATURE_DS18B20_PUB_NO_CHANGE_INTEVAL (5 * 60 * 1000)
+#define TEMPERATURE_DS18B20_PUB_VALUE_CHANGE 0.5f
 
 #define SENSOR_UPDATE_SERVICE_INTERVAL      (15 * 1000)
 #define SENSOR_UPDATE_NORMAL_INTERVAL       (5 * 60 * 1000)
@@ -28,6 +30,15 @@ twr_soil_sensor_sensor_t sensors[MAX_SOIL_SENSORS];
 
 static twr_module_relay_t relay_0_0;
 static twr_module_relay_t relay_0_1;
+
+static twr_ds18b20_t ds18b20;
+struct {
+    event_param_t temperature;
+    event_param_t temperature_ds18b20;
+    event_param_t humidity;
+    event_param_t illuminance;
+    event_param_t pressure;
+} params;
 
 void button_event_handler(twr_button_t *self, twr_button_event_t event, void *event_param)
 {
@@ -263,10 +274,34 @@ void soil_sensor_event_handler(twr_soil_sensor_t *self, uint64_t device_address,
     }
 }
 
+void ds18b20_event_handler(twr_ds18b20_t *self, uint64_t device_address, twr_ds18b20_event_t e, void *p)
+{
+    (void) p;
+
+    float value = NAN;
+
+    if (e == TWR_DS18B20_EVENT_UPDATE)
+    {
+        twr_ds18b20_get_temperature_celsius(self, device_address, &value);
+
+        //twr_log_debug("UPDATE %" PRIx64 "(%d) = %f", device_address, device_index, value);
+
+        if ((fabs(value - params.temperature_ds18b20.value) >= TEMPERATURE_DS18B20_PUB_VALUE_CHANGE) || (params.temperature_ds18b20.next_pub < twr_scheduler_get_spin_tick()))
+        {
+            static char topic[64];
+            snprintf(topic, sizeof(topic), "ext-thermometer/%" PRIx64 "/temperature", device_address);
+            twr_radio_pub_float(topic, &value);
+            params.temperature_ds18b20.value = value;
+            params.temperature_ds18b20.next_pub = twr_scheduler_get_spin_tick() + TEMPERATURE_DS18B20_PUB_NO_CHANGE_INTEVAL;
+            twr_scheduler_plan_from_now(0, 300);
+        }
+    }
+}
 void switch_to_normal_mode_task(void *param)
 {
     twr_tmp112_set_update_interval(&tmp112, TEMPERATURE_UPDATE_NORMAL_INTERVAL);
     twr_soil_sensor_set_update_interval(&soil_sensor, SENSOR_UPDATE_NORMAL_INTERVAL);
+    twr_ds18b20_set_update_interval(&ds18b20, TEMPERATURE_UPDATE_NORMAL_INTERVAL);
     twr_scheduler_unregister(twr_scheduler_get_current_task_id());
 }
 
@@ -303,9 +338,14 @@ void application_init(void)
     twr_module_relay_init(&relay_0_1, TWR_MODULE_RELAY_I2C_ADDRESS_ALTERNATE);
     //twr_log_debug("log 6");
 
+    // For single sensor you can call twr_ds18b20_init()
+    twr_ds18b20_init_single(&ds18b20, TWR_DS18B20_RESOLUTION_BITS_12);
+    twr_ds18b20_set_event_handler(&ds18b20, ds18b20_event_handler, NULL);
+    twr_ds18b20_set_update_interval(&ds18b20, TEMPERATURE_UPDATE_SERVICE_INTERVAL);
+
     // Initialize radio
     twr_radio_init(TWR_RADIO_MODE_NODE_LISTENING);
-    twr_radio_pairing_request("vyz-bazen", VERSION);
+    twr_radio_pairing_request("vyz-bazen", FW_VERSION);
     //twr_log_debug("log 7");
 
     twr_scheduler_register(switch_to_normal_mode_task, NULL, SERVICE_MODE_INTERVAL);
