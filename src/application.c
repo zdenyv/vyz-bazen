@@ -3,18 +3,22 @@
 
 #define MAX_SOIL_SENSORS                    5
 
-#define SERVICE_MODE_INTERVAL               (15 * 60 * 1000)
-#define BATTERY_UPDATE_INTERVAL             (60 * 60 * 1000)
+#define SEKUND                              1000
+#define MINUT                               (60 * SEKUND)
+#define HODIN                               (60 * MINUT)
 
-#define TEMPERATURE_PUB_INTERVAL            (15 * 60 * 1000)
-#define TEMPERATURE_PUB_DIFFERENCE          0.2f
-#define TEMPERATURE_UPDATE_SERVICE_INTERVAL (1 * 1000)
-#define TEMPERATURE_UPDATE_NORMAL_INTERVAL  (10 * 1000)
-#define TEMPERATURE_DS18B20_PUB_NO_CHANGE_INTEVAL (5 * 60 * 1000)
-#define TEMPERATURE_DS18B20_PUB_VALUE_CHANGE 0.5f
+#define SERVICE_MODE_INTERVAL               (5 * MINUT)
+#define BATTERY_UPDATE_INTERVAL             (10 * HODIN)
 
-#define SENSOR_UPDATE_SERVICE_INTERVAL      (15 * 1000)
-#define SENSOR_UPDATE_NORMAL_INTERVAL       (5 * 60 * 1000)
+#define TEMPERATURE_PUB_INTERVAL            (15 * MINUT)
+#define TEMPERATURE_PUB_DIFFERENCE          0.5f
+#define TEMPERATURE_UPDATE_SERVICE_INTERVAL (1 * MINUT)
+#define TEMPERATURE_UPDATE_NORMAL_INTERVAL  (30 * MINUT)
+#define TEMPERATURE_DS18B20_PUB_NO_CHANGE_INTEVAL (30 * MINUT)
+#define TEMPERATURE_DS18B20_PUB_VALUE_CHANGE 0.2f
+
+#define SENSOR_UPDATE_SERVICE_INTERVAL      (5 * MINUT)
+#define SENSOR_UPDATE_NORMAL_INTERVAL       (30 * MINUT)
 
 // LED instance
 twr_led_t led;
@@ -27,10 +31,11 @@ twr_soil_sensor_t soil_sensor;
 // Sensors array
 twr_soil_sensor_sensor_t sensors[MAX_SOIL_SENSORS];
 
-static twr_module_relay_t relay_0_0;
-static twr_module_relay_t relay_0_1;
+twr_module_relay_t relay_0_0;
+twr_module_relay_t relay_0_1;
+bool stav = false;
 
-static twr_ds18b20_t ds18b20;
+twr_ds18b20_t ds18b20;
 struct {
     event_param_t temperature;
     event_param_t temperature_ds18b20;
@@ -55,6 +60,9 @@ void button_event_handler(twr_button_t *self, twr_button_event_t event, void *ev
 
         // Publish button message on radio
         twr_radio_pub_push_button(&button_click_count);
+        stav = !stav;
+        twr_module_relay_set_state(&relay_0_0, stav);
+        twr_radio_pub_state(TWR_RADIO_PUB_STATE_RELAY_MODULE_0, &stav);
     }
     else if (event == TWR_BUTTON_EVENT_HOLD)
     {
@@ -133,7 +141,7 @@ void tmp112_event_handler(twr_tmp112_t *self, twr_tmp112_event_t event, void *ev
 void twr_radio_node_on_state_get(uint64_t *id, uint8_t state_id)
 {
     (void) id;
-    twr_log_debug(sprintf("twr_radio_node_on_state_get state_id=%d", state_id));
+    //twr_log_debug(sprintf("twr_radio_node_on_state_get state_id=%d", state_id));
 
     switch (state_id) {
         case TWR_RADIO_NODE_STATE_RELAY_MODULE_0:
@@ -262,13 +270,14 @@ void soil_sensor_event_handler(twr_soil_sensor_t *self, uint64_t device_address,
             int raw_cap = (int)raw_cap_u16;
             twr_radio_pub_int(topic, &raw_cap);
 
-            /*
             // Experimental - send percent moisture value based on sensor calibration
             int moisture;
             twr_soil_sensor_get_moisture(self, device_address, &moisture);
             snprintf(topic, sizeof(topic), "soil-sensor/%llx/moisture", device_address);
             twr_radio_pub_int(topic, &moisture);
-            */
+
+            // ZDENY timeout in ms for receiving relay command
+            twr_radio_set_rx_timeout_for_sleeping_node(1000);
         }
     }
     else if (event == TWR_SOIL_SENSOR_EVENT_ERROR)
@@ -305,15 +314,14 @@ void ds18b20_event_handler(twr_ds18b20_t *self, uint64_t device_address, twr_ds1
 void switch_to_normal_mode_task(void *param)
 {
     twr_tmp112_set_update_interval(&tmp112, TEMPERATURE_UPDATE_NORMAL_INTERVAL);
-/****    twr_soil_sensor_set_update_interval(&soil_sensor, SENSOR_UPDATE_NORMAL_INTERVAL);
+    twr_soil_sensor_set_update_interval(&soil_sensor, SENSOR_UPDATE_NORMAL_INTERVAL);
     twr_ds18b20_set_update_interval(&ds18b20, TEMPERATURE_UPDATE_NORMAL_INTERVAL);
-*/    twr_scheduler_unregister(twr_scheduler_get_current_task_id());
+    twr_scheduler_unregister(twr_scheduler_get_current_task_id());
 }
 
 void application_init(void)
 {
     twr_log_init(TWR_LOG_LEVEL_DUMP, TWR_LOG_TIMESTAMP_ABS);
-    twr_log_debug("log 1");
     // Initialize LED
     twr_led_init(&led, TWR_GPIO_LED, false, false);
 
@@ -327,20 +335,20 @@ void application_init(void)
     twr_tmp112_set_update_interval(&tmp112, TEMPERATURE_UPDATE_SERVICE_INTERVAL);
 
     // Initialize soil sensor
-  /***  twr_soil_sensor_init_multiple(&soil_sensor, sensors, 5);
+    twr_soil_sensor_init_multiple(&soil_sensor, sensors, 5);
     twr_soil_sensor_set_event_handler(&soil_sensor, soil_sensor_event_handler, NULL);
     twr_soil_sensor_set_update_interval(&soil_sensor, SENSOR_UPDATE_SERVICE_INTERVAL);
-*/
+
     // Initialize relay module(s)
     twr_module_relay_init(&relay_0_0, TWR_MODULE_RELAY_I2C_ADDRESS_DEFAULT);
     twr_module_relay_init(&relay_0_1, TWR_MODULE_RELAY_I2C_ADDRESS_ALTERNATE);
-    twr_log_debug("init rele ok");
+    //twr_log_debug("init rele ok");
 
     // For single sensor you can call twr_ds18b20_init()
-/***    twr_ds18b20_init_single(&ds18b20, TWR_DS18B20_RESOLUTION_BITS_12);
+    twr_ds18b20_init_single(&ds18b20, TWR_DS18B20_RESOLUTION_BITS_12);
     twr_ds18b20_set_event_handler(&ds18b20, ds18b20_event_handler, NULL);
     twr_ds18b20_set_update_interval(&ds18b20, TEMPERATURE_UPDATE_SERVICE_INTERVAL);
-*/
+
     // Initialize battery
     twr_module_battery_init();
     twr_module_battery_set_event_handler(battery_event_handler, NULL);
@@ -348,12 +356,9 @@ void application_init(void)
 
     // Initialize radio
     twr_radio_init(TWR_RADIO_MODE_NODE_SLEEPING);
-    twr_radio_pairing_request("zdeny-bazen-s-baterkama", "2.0");
+    twr_radio_pairing_request("zdeny-bazen-s-baterkama", "2.2");
 
     twr_scheduler_register(switch_to_normal_mode_task, NULL, SERVICE_MODE_INTERVAL);
-
-    int x = twr_module_relay_get_state(&relay_0_0);
-    twr_log_debug(sprintf("STAV RELE = %d", x));
 
     twr_led_pulse(&led, 2000);
 }
