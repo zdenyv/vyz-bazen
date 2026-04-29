@@ -5,3 +5,4 @@ firmware.bin
 .pio/
 .vscode/
 .setting/
+src/version.h
