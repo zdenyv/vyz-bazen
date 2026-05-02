@@ -11,12 +11,13 @@
 
 #define SERVICE_MODE_INTERVAL               (5 * MINUT)
 
+// Mains-powered, optimalizováno na rychlou reakci na změnu teploty
 #define TEMPERATURE_PUB_INTERVAL            (15 * MINUT)
-#define TEMPERATURE_PUB_DIFFERENCE          0.5f
-#define TEMPERATURE_UPDATE_SERVICE_INTERVAL (1 * MINUT)
-#define TEMPERATURE_UPDATE_NORMAL_INTERVAL  (30 * MINUT)
-#define TEMPERATURE_DS18B20_PUB_NO_CHANGE_INTEVAL (30 * MINUT)
-#define TEMPERATURE_DS18B20_PUB_VALUE_CHANGE 0.2f
+#define TEMPERATURE_PUB_DIFFERENCE          0.1f
+#define TEMPERATURE_UPDATE_SERVICE_INTERVAL (10 * SEKUND)
+#define TEMPERATURE_UPDATE_NORMAL_INTERVAL  (10 * SEKUND)
+#define TEMPERATURE_DS18B20_PUB_NO_CHANGE_INTEVAL (15 * MINUT)
+#define TEMPERATURE_DS18B20_PUB_VALUE_CHANGE 0.1f
 
 void radio_pub_state(zdeny_relay_channel_t channel);
 void relay_set(uint64_t *id, const char *topic, void *value, void *param);
