@@ -3,6 +3,8 @@
 #include <zdeny_relay.h>
 #include "version.h"
 
+#define MAX_DS18B20_SENSORS                 5
+
 #define SEKUND                              1000
 #define MINUT                               (60 * SEKUND)
 #define HODIN                               (60 * MINUT)
@@ -56,9 +58,11 @@ twr_module_relay_t relay_0_0;
 twr_module_relay_t relay_0_1;
 
 twr_ds18b20_t ds18b20;
+twr_ds18b20_sensor_t ds18b20_sensors[MAX_DS18B20_SENSORS];
+event_param_t ds18b20_params[MAX_DS18B20_SENSORS];
+
 struct {
     event_param_t temperature;
-    event_param_t temperature_ds18b20;
 } params;
 
 
@@ -245,21 +249,31 @@ void twr_radio_node_on_state_set(uint64_t *id, uint8_t state_id, bool *state) {
 void ds18b20_event_handler(twr_ds18b20_t *self, uint64_t device_address, twr_ds18b20_event_t e, void *p) {
     (void) p;
 
-    float value = NAN;
+    if (e != TWR_DS18B20_EVENT_UPDATE) {
+        return;
+    }
 
-    if (e == TWR_DS18B20_EVENT_UPDATE) {
-        twr_ds18b20_get_temperature_celsius(self, device_address, &value);
-
-        //twr_log_debug("UPDATE %" PRIx64 "(%d) = %f", device_address, device_index, value);
-
-        if ((fabs(value - params.temperature_ds18b20.value) >= TEMPERATURE_DS18B20_PUB_VALUE_CHANGE) || (params.temperature_ds18b20.next_pub < twr_scheduler_get_spin_tick())) {
-            static char topic[64];
-            snprintf(topic, sizeof(topic), "ext-thermometer/%" PRIx64 "/temperature", device_address);
-            twr_radio_pub_float(topic, &value);
-            params.temperature_ds18b20.value = value;
-            params.temperature_ds18b20.next_pub = twr_scheduler_get_spin_tick() + TEMPERATURE_DS18B20_PUB_NO_CHANGE_INTEVAL;
-            twr_scheduler_plan_from_now(0, 300);
+    int idx = -1;
+    for (int i = 0; i < MAX_DS18B20_SENSORS; i++) {
+        if (ds18b20_sensors[i]._device_address == device_address) {
+            idx = i;
+            break;
         }
+    }
+    if (idx < 0) {
+        return;
+    }
+
+    float value = NAN;
+    twr_ds18b20_get_temperature_celsius(self, device_address, &value);
+
+    if ((fabs(value - ds18b20_params[idx].value) >= TEMPERATURE_DS18B20_PUB_VALUE_CHANGE) || (ds18b20_params[idx].next_pub < twr_scheduler_get_spin_tick())) {
+        static char topic[64];
+        snprintf(topic, sizeof(topic), "ext-thermometer/%" PRIx64 "/temperature", device_address);
+        twr_radio_pub_float(topic, &value);
+        ds18b20_params[idx].value = value;
+        ds18b20_params[idx].next_pub = twr_scheduler_get_spin_tick() + TEMPERATURE_DS18B20_PUB_NO_CHANGE_INTEVAL;
+        twr_scheduler_plan_from_now(0, 300);
     }
 }
 
@@ -293,8 +307,8 @@ void application_init(void) {
     twr_module_relay_init(&relay_0_0, TWR_MODULE_RELAY_I2C_ADDRESS_DEFAULT);
     twr_module_relay_init(&relay_0_1, TWR_MODULE_RELAY_I2C_ADDRESS_ALTERNATE);
 
-    // Initialize DS18B20 external thermometer (sensor module)
-    twr_ds18b20_init_single(&ds18b20, TWR_DS18B20_RESOLUTION_BITS_12);
+    // Initialize DS18B20 external thermometers (sensor module)
+    twr_ds18b20_init_multiple(&ds18b20, ds18b20_sensors, MAX_DS18B20_SENSORS, TWR_DS18B20_RESOLUTION_BITS_12);
     twr_ds18b20_set_event_handler(&ds18b20, ds18b20_event_handler, NULL);
     twr_ds18b20_set_update_interval(&ds18b20, TEMPERATURE_UPDATE_SERVICE_INTERVAL);
 
